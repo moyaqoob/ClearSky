@@ -1,15 +1,17 @@
 import type { Request,Response } from "express";
 import axios from "axios"
 import { BASE_URL, token } from "../utils";
+import { drizzle } from 'drizzle-orm/node-postgres';
 
-export async function getData(req:Request,res:Response){
+const db = drizzle(process.env.DATABASE_URL!);
+async function getData(req:Request,res:Response){
     const {lat,lng} = req.body;
 
     if(!lat || !lng){
          res.send("Lat and lng not found")
          return;
     }
-    const response = await axios.get(`${BASE_URL}/geo:${lat};${lng}/?token=${token}`)
+    const response = await axios.get(`${BASE_URL}/geo:${lat};:${lng}/?token=${token}`)
     const data  = response.data
 
     const formatted = {
@@ -33,18 +35,26 @@ function doSomething(lat:number,long:number){
     console.log("lat+long",lat,long)
 }
 
-export function getRecommendation(req:Request,res:Response){
-    
+function getRecommendation(req:Request,res:Response){
+    const recommendation = req.body;
+    if(!recommendation){
+        res.send("Nothing to recommend")
+    }
 }
 
-export function getHistory(req:Request,res:Response){
+//add events every hour.
+function addEvents(req:Request,res:Response){
+     
+}
+
+function getHistory(req:Request,res:Response){
     const days = req.params.days;
     const date = new Date()
 
     if(!days){
         res.json("Days not found")
     }
-    
 
 }
 
+export {getData,getRecommendation,getHistory}

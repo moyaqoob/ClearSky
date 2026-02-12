@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getData } from "../services/user.service";
+import { getData, getHistory, getRecommendation } from "../services/user.service";
 
 const userRoutes  = Router();
 
