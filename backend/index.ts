@@ -2,19 +2,23 @@ import cors from "cors";
 import "dotenv/config";
 import express from "express";
 import path from "path";
+import { existsSync } from "fs";
 import userRoutes from "./routes/user.routes";
 
 const __dirname = import.meta.dirname;
 
-// Path to frontend build (from backend folder: ../frontend/dist)
-const frontendDist = path.join(__dirname, "..", "frontend", "dist");
-
-console.log(import.meta.url)
-console.log("frontend dist",frontendDist)
+// Single-server deploy: serve frontend from repo frontend/dist
+// When running from backend/dist/ (prod): ../../frontend/dist
+// When running from backend/ (dev): ../frontend/dist
+const frontendDistProd = path.join(__dirname, "..", "..", "frontend", "dist");
+const frontendDistDev = path.join(__dirname, "..", "frontend", "dist");
+const frontendDist = existsSync(frontendDistProd)
+  ? frontendDistProd
+  : frontendDistDev;
 const app = express();
 
 app.use(cors({
-  origin: "http://localhost:5173",
+  origin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
   credentials: true,
 }));
 app.use(express.json());
@@ -35,4 +39,5 @@ app.get("", (req, res) => {
   res.sendFile(path.join(frontendDist, "index.html"));
 });
 
-app.listen(4000);
+const PORT = process.env.PORT ?? 4000;
+app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));

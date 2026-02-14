@@ -1,4 +1,6 @@
-const API_BASE = "/aqi";
+const API_BASE = import.meta.env.PROD
+  ? "https://clearsky-nuxa.onrender.com/aqi"
+  : "/aqi";
 
 export type AqiLevel = {
   max: number;
