@@ -1,11 +1,18 @@
 import { Router } from "express";
-import { getData, getHistory, getRecommendation } from "../services/user.service";
+import {
+  getData,
+  getGeocode,
+  getHistory,
+  getRecommendation,
+  getTips,
+} from "../services/user.service";
 
-const userRoutes  = Router();
+const userRoutes = Router();
 
-userRoutes.get("/current",getData)
-userRoutes.get("/recommendation",getRecommendation)
-userRoutes.get("/history/:days",getHistory)
+userRoutes.get("/geocode", getGeocode);
+userRoutes.get("/current", getData);
+userRoutes.get("/recommendation", getRecommendation);
+userRoutes.get("/history/:days", getHistory);
+userRoutes.get("/tips", getTips);
 
-
-export default userRoutes
+export default userRoutes;

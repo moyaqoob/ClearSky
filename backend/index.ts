@@ -1,17 +1,22 @@
-import express from  "express"
-import userRoutes from "./routes/user.routes"
+import cors from "cors";
+import "dotenv/config";
+import express from "express";
+import userRoutes from "./routes/user.routes";
 
+const app = express();
 
-const app = express()
-import 'dotenv/config';
+app.use(cors());
+app.use(express.json());
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+  })
+);
 
+app.use("/aqi", userRoutes);
 
-app.post("/",(req,res)=>{
-    console.log("anti pollution")
-})
-
-
-app.use("/aqi",userRoutes)
-
-
-app.listen(3000)
+const PORT = process.env.PORT ?? 3000;
+app.listen(PORT, () => {
+  console.log(`ClearSky API running at http://localhost:${PORT}`);
+});

@@ -1,13 +1,13 @@
-import { useState } from 'react'
-import './App.css'
+import "./App.css";
+import Dashboard from "./components/dashboard";
 
 function App() {
-
   return (
-    <div>
-
-    </div>
-  )
+    <>
+      <Dashboard />
+      <div className="app" />
+    </>
+  );
 }
 
-export default App
+export default App;
