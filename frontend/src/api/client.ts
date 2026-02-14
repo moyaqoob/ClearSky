@@ -1,4 +1,4 @@
-const API_BASE = "/api/aqi";
+const API_BASE = "/aqi";
 
 export type AqiLevel = {
   max: number;

@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "target": "ES2023",
     "lib": ["ES2023"],
     "module": "ESNext",
     "types": ["node"],
@@ -20,8 +19,6 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "erasableSyntaxOnly": true,
-    "noUncheckedSideEffectImports": true
   },
   "include": ["vite.config.ts"]
 }

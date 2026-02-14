@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    fetchCurrent,
-    fetchHistory,
-    fetchLocationSearch,
-    fetchRecommendation,
-    fetchTips,
-    type AqiCurrent,
-    type GeocodeResult,
-    type HistoryDay,
-    type HistoryResponse,
-    type Recommendation,
-    type TipsResponse,
+  fetchCurrent,
+  fetchHistory,
+  fetchLocationSearch,
+  fetchRecommendation,
+  fetchTips,
+  type AqiCurrent,
+  type GeocodeResult,
+  type HistoryDay,
+  type HistoryResponse,
+  type Recommendation,
+  type TipsResponse,
 } from "../api/client";
 import "./Dashboard.css";
 
-const DEFAULT_LAT = 40.7128;
+const DEFAULT_LAT = 40.0;
 const DEFAULT_LNG = -74.006;
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -32,6 +32,7 @@ export default function Dashboard() {
   const [locationQuery, setLocationQuery] = useState("");
   const [suggestions, setSuggestions] = useState<GeocodeResult[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [geocodeLoading, setGeocodeLoading] = useState(false);
   const [useMyLocation, setUseMyLocation] = useState(false);
   const [historyDays, setHistoryDays] = useState(7);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -51,7 +52,7 @@ export default function Dashboard() {
         const recRes = await fetchRecommendation(current.aqi);
         setRecommendation(recRes);
         setHistoryData(hist ?? null);
-        setTips(tipsRes);
+        setTips(tipsRes)
       } catch (e) {
         setError(e instanceof Error ? e.message : "Something went wrong");
         setAqi(null);
@@ -94,19 +95,23 @@ export default function Dashboard() {
     }
   };
 
-  // Debounced location search
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     const q = locationQuery.trim();
     if (q.length < 2) {
       setSuggestions([]);
+      setGeocodeLoading(false);
       return;
     }
+
+    setGeocodeLoading(true);
     searchDebounceRef.current = setTimeout(() => {
-      fetchLocationSearch(q).then((r) => {
-        setSuggestions(r.results ?? []);
-        setSuggestionsOpen(true);
-      });
+      fetchLocationSearch(q)
+        .then((r) => {
+          setSuggestions(r.results ?? []);
+          setSuggestionsOpen(true);
+        })
+        .finally(() => setGeocodeLoading(false));
     }, SEARCH_DEBOUNCE_MS);
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
@@ -125,15 +130,32 @@ export default function Dashboard() {
     [loadData]
   );
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const query = locationQuery.trim();
     if (suggestions.length > 0 && suggestionsOpen) {
       handleSelectPlace(suggestions[0]);
-    } else if (locationQuery.trim().length >= 2) {
-      fetchLocationSearch(locationQuery.trim()).then((r) => {
-        if (r.results?.length) handleSelectPlace(r.results[0]);
-        else loadData(lat, lng);
-      });
+      return;
+    }
+    if (query.length >= 2) {
+      setGeocodeLoading(true);
+      try {
+        const r = await fetchLocationSearch(query);
+        if (r.results?.length) {
+          const place = r.results[0];
+          setLat(place.lat);
+          setLng(place.lng);
+          setLocationQuery(place.displayName);
+          setSuggestions([]);
+          setSuggestionsOpen(false);
+          await loadData(place.lat, place.lng);
+        } else {
+          setError("No locations found. Try a different search or use coordinates.");
+          loadData(lat, lng);
+        }
+      } finally {
+        setGeocodeLoading(false);
+      }
     } else {
       loadData(lat, lng);
     }
@@ -169,178 +191,202 @@ export default function Dashboard() {
     );
   }
 
+  const suggestionList = suggestions.map((place: GeocodeResult) => (
+    <li
+      key={place.placeId}
+      role="option"
+      className="location-suggestion-item"
+      onClick={() => handleSelectPlace(place)}
+    >
+      {place.displayName}
+    </li>
+  ));
+
   return (
-    <div className="dashboard">
-      <header className="dashboard-header">
-        <h1 className="brand">
-          <span className="brand-icon">🌬️</span> ClearSky
-        </h1>
-        <p className="tagline">Air quality at a glance</p>
+    <>
+      <div className="dashboard">
+        <header className="dashboard-header">
+          <h1 className="brand">
+            <span className="brand-icon">🌬️</span> ClearSky
+          </h1>
+          <p className="tagline">Air quality at a glance</p>
 
-        <form className="location-form" onSubmit={handleSearchSubmit}>
-          <div className="location-search-wrap" ref={suggestionsRef}>
-            <label className="location-search-label">
-              <span>Search by city or place</span>
-              <input
-                type="text"
-                className="location-search-input"
-                placeholder="e.g. London, Paris, New York"
-                value={locationQuery}
-                onChange={(e) => setLocationQuery(e.target.value)}
-                onFocus={() => suggestions.length > 0 && setSuggestionsOpen(true)}
-                autoComplete="off"
-              />
-            </label>
-            {suggestionsOpen && suggestions.length > 0 && (
-              <ul className="location-suggestions" role="listbox">
-                {suggestions.map((place: GeocodeResult) => (
-                  <li
-                    key={place.placeId}
-                    role="option"
-                    className="location-suggestion-item"
-                    onClick={() => handleSelectPlace(place)}
-                  >
-                    {place.displayName}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div className="form-actions">
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => setUseMyLocation(true)}
-            >
-              Use my location
-            </button>
-            <button type="submit" className="btn btn-primary">
-              Get air quality
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={handleRefresh}
-            >
-              Refresh
-            </button>
-          </div>
-        </form>
-      </header>
-
-      {error && <div className="alert alert-error">{error}</div>}
-
-      {aqi && (
-        <>
-          <section className="card aqi-card">
-            <div
-              className="aqi-gauge"
-              style={{ ["--aqi-color" as string]: aqi.level.color } as React.CSSProperties}
-            >
-              <span className="aqi-value">{aqi.aqi}</span>
-              <span className="aqi-label">{aqi.level.label}</span>
-            </div>
-            <div className="aqi-meta">
-              <p className="aqi-city">{aqi.city}</p>
-              <p className="aqi-time">{new Date(aqi.time).toLocaleString()}</p>
-              {aqi.dominantPollutant && (
-                <p className="aqi-dominant">
-                  Dominant: {aqi.dominantPollutant.toUpperCase()}
-                </p>
-              )}
-            </div>
-            <div className="pollutants">
-              {Object.entries(aqi.pollutants).map(([key, value]) =>
-                value != null ? (
-                  <span key={key} className="pollutant-tag">
-                    {key.toUpperCase()}: {value}
-                  </span>
-                ) : null
-              )}
-            </div>
-          </section>
-
-          {recommendation && (
-            <section className="card recommendation-card">
-              <h2>Recommendation</h2>
-              <p
-                className="recommendation-text"
-                style={{ borderLeftColor: recommendation.color }}
-              >
-                {recommendation.recommendation}
-              </p>
-              <div className="levels-legend">
-                {recommendation.allLevels.map((l: { label: string; color: string }) => (
-                  <span
-                    key={l.label}
-                    className="level-dot"
-                    style={{ background: l.color }}
-                    title={l.label}
+          <form className="location-form" onSubmit={handleSearchSubmit}>
+            <div className="location-search-wrap" ref={suggestionsRef}>
+              <label className="location-search-label">
+                <span>Search by city or place — we&apos;ll convert it to coordinates and fetch current AQI</span>
+                <div className="location-input-wrapper">
+                  <input
+                    type="text"
+                    className="location-search-input"
+                    placeholder="e.g. London, Paris, Tokyo"
+                    value={locationQuery}
+                    onChange={(e) => setLocationQuery(e.target.value)}
+                    onFocus={() => {
+                      if (suggestions.length > 0) setSuggestionsOpen(true);
+                    }}
+                    autoComplete="off"
+                    aria-busy={geocodeLoading}
                   />
-                ))}
-              </div>
-            </section>
-          )}
+                  {geocodeLoading && (
+                    <span className="location-search-spinner" aria-hidden />
+                  )}
+                </div>
+              </label>
+              {suggestionsOpen && (suggestions.length > 0 || geocodeLoading) ? (
+                <ul className="location-suggestions" role="listbox">
+                  {geocodeLoading && suggestions.length === 0 ? (
+                    <li className="location-suggestion-item location-suggestion-loading">
+                      Finding locations…
+                    </li>
+                  ) : (
+                    suggestionList
+                  )}
+                </ul>
+              ) : null}
+            </div>
+            <div className="form-actions">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setUseMyLocation(true)}
+              >
+                Use my location
+              </button>
+              <button type="submit" className="btn btn-primary">
+                Get air quality
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleRefresh}
+              >
+                Refresh
+              </button>
+            </div>
+          </form>
+        </header>
 
-          {(historyData?.history?.length ?? 0) > 0 ? (
-            <section className="card history-card">
-              <div className="history-header">
-                <h2>History</h2>
-                <select
-                  value={historyDays}
-                  onChange={(e) => setHistoryDays(parseInt(e.target.value, 10))}
-                >
-                  <option value={3}>Last 3 days</option>
-                  <option value={7}>Last 7 days</option>
-                  <option value={14}>Last 14 days</option>
-                  <option value={30}>Last 30 days</option>
-                </select>
+        {error && <div className="alert alert-error">{error}</div>}
+
+        {aqi && (
+          <>
+            <section className="card aqi-card">
+              <div
+                className="aqi-gauge"
+                style={
+                  { "--aqi-color": aqi.level.color } as React.CSSProperties
+                }
+              >
+                <span className="aqi-value">{aqi.aqi}</span>
+                <span className="aqi-label">{aqi.level.label}</span>
               </div>
-              <div className="history-list">
-                {historyData!.history.map((day: HistoryDay) => (
-                  <div key={day.date} className="history-day">
-                    <span className="history-date">{day.date}</span>
-                    <span
-                      className="history-avg"
-                      style={{
-                        color:
-                          day.avgAqi <= 50
-                            ? "#00e400"
-                            : day.avgAqi <= 100
-                            ? "#ffff00"
-                            : day.avgAqi <= 150
-                            ? "#ff7e00"
-                            : "#ff0000",
-                      }}
-                    >
-                      AQI {day.avgAqi}
+              <div className="aqi-meta">
+                <p className="aqi-city">{aqi.city}</p>
+                <p className="aqi-time">
+                  {new Date(aqi.time).toLocaleString()}
+                </p>
+                {aqi.dominantPollutant && (
+                  <p className="aqi-dominant">
+                    Dominant: {aqi.dominantPollutant.toUpperCase()}
+                  </p>
+                )}
+              </div>
+              <div className="pollutants">
+                {Object.entries(aqi.pollutants).map(([key, value]) =>
+                  value != null ? (
+                    <span key={key} className="pollutant-tag">
+                      {key.toUpperCase()}: {value}
                     </span>
-                  </div>
-                ))}
+                  ) : null
+                )}
               </div>
             </section>
-          ) : (
-            <section className="card history-card">
-              <h2>History</h2>
-              <p className="history-empty">
-                History will appear here as you check air quality. Use “Refresh”
-                or search different locations to build it.
-              </p>
-            </section>
-          )}
 
-          {tips && (
-            <section className="card tips-card">
-              <h2>Tips to stay safe</h2>
-              <ul className="tips-list">
-                {tips.tips.map((tip: string, i: number) => (
-                  <li key={i}>{tip}</li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </>
-      )}
-    </div>
+            {recommendation && (
+              <section className="card recommendation-card">
+                <h2>Recommendation</h2>
+                <p
+                  className="recommendation-text"
+                  style={{ borderLeftColor: recommendation.color }}
+                >
+                  {recommendation.recommendation}
+                </p>
+                <div className="levels-legend">
+                  {recommendation.allLevels.map((l) => (
+                    <span
+                      key={l.label}
+                      className="level-dot"
+                      style={{ background: l.color }}
+                      title={l.label}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {(historyData?.history?.length ?? 0) > 0 ? (
+              <section className="card history-card">
+                <div className="history-header">
+                  <h2>History</h2>
+                  <select
+                    value={historyDays}
+                    onChange={(e) =>
+                      setHistoryDays(parseInt(e.target.value, 10))
+                    }
+                  >
+                    <option value={3}>Last 3 days</option>
+                    <option value={7}>Last 7 days</option>
+                    <option value={14}>Last 14 days</option>
+                    <option value={30}>Last 30 days</option>
+                  </select>
+                </div>
+                <div className="history-list">
+                  {historyData!.history.map((day: HistoryDay) => (
+                    <div key={day.date} className="history-day">
+                      <span className="history-date">{day.date}</span>
+                      <span
+                        className="history-avg"
+                        style={{
+                          color:
+                            day.avgAqi <= 50
+                              ? "#00e400"
+                              : day.avgAqi <= 100
+                              ? "#ffff00"
+                              : day.avgAqi <= 150
+                              ? "#ff7e00"
+                              : "#ff0000",
+                        }}
+                      >
+                        AQI {day.avgAqi}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : (
+              <section className="card history-card">
+                <h2>History</h2>
+                <p className="history-empty">
+                  History will appear here as you check air quality. Use
+                  “Refresh” or search different locations to build it.
+                </p>
+              </section>
+            )}
+
+            {tips && (
+              <section className="card tips-card">
+                <h2>Tips to stay safe</h2>
+                <ul className="tips-list">
+                  {tips.tips.map((tip, i) => (
+                    <li key={i}>{tip}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </>
+        )}
+      </div>
+    </>
   );
 }
